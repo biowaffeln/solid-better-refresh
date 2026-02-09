@@ -3,5 +3,10 @@ import solid from "vite-plugin-solid";
 import solidBetterRefresh from "solid-better-refresh";
 
 export default defineConfig({
-  plugins: [solid(), solidBetterRefresh()],
+  plugins: [
+    solid(),
+    solidBetterRefresh({
+      primitives: ["createCounter"],
+    }),
+  ],
 });

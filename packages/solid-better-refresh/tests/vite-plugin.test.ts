@@ -151,12 +151,12 @@ describe("solidBetterRefresh (full plugin)", () => {
     it("uses custom primitives for quick-check", async () => {
       const plugin = getTransformPlugin({ primitives: ["createMyState"] });
 
-      // Should skip files without custom primitive
+      // Should still process files with default primitives (merge behavior)
       const result1 = await (plugin.transform as Function)(
         'import { createSignal } from "solid-js"; function App() { createSignal(0); }',
         "/src/App.tsx"
       );
-      expect(result1).toBeUndefined();
+      expect(result1).toBeDefined();
 
       // Should process files with custom primitive
       const code = `

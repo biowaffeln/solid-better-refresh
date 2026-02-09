@@ -1,6 +1,8 @@
 import { createSignal } from "solid-js";
 import { ThemeProvider } from "./ThemeContext";
 import ThemedCard from "./ThemedCard";
+import StoreDemo from "./StoreDemo";
+import CustomPrimitiveDemo from "./CustomPrimitiveDemo";
 
 function App() {
   const [count, setCount] = createSignal(0);
@@ -23,6 +25,8 @@ function App() {
         </div>
         <p class="greeting">Hello, {name() || "world"}!</p>
         <ThemedCard />
+        <StoreDemo />
+        <CustomPrimitiveDemo />
       </div>
     </ThemeProvider>
   );

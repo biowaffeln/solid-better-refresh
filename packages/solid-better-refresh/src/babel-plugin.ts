@@ -29,7 +29,7 @@ export default function solidBetterRefreshBabelPlugin(
   options: BabelPluginOptions = {}
 ): PluginObj<PluginState> {
   const primitiveMap = options.primitives
-    ? Object.fromEntries(options.primitives.map((p) => [p, p]))
+    ? { ...DEFAULT_PRIMITIVES, ...Object.fromEntries(options.primitives.map((p) => [p, p])) }
     : DEFAULT_PRIMITIVES;
 
   /** Build an `import.meta` AST node using the correct metaProperty node type. */

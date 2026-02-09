@@ -36,8 +36,8 @@ A structure check detects when you add or remove signals/stores from a component
 
 ```ts
 solidBetterRefresh({
-  // Custom primitives to persist (replaces the defaults)
-  primitives: ["createSignal", "createStore", "createMyCustomPrimitive"],
+  // Additional primitives to persist (merged with the defaults: createSignal, createStore)
+  primitives: ["createMyCustomPrimitive"],
 });
 ```
 
@@ -50,7 +50,7 @@ import solidBetterRefreshBabel from "solid-better-refresh/babel";
 
 // In your babel config
 plugins: [
-  [solidBetterRefreshBabel, { primitives: ["createSignal", "createStore"] }],
+  [solidBetterRefreshBabel, { primitives: ["createMyCustomPrimitive"] }],
 ];
 ```
 

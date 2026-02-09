@@ -242,7 +242,7 @@ describe("babel-plugin-solid-better-refresh", () => {
       expect(output).not.toContain("createMyState(0)");
     });
 
-    it("does NOT transform default primitives when custom ones are configured", () => {
+    it("still transforms default primitives when custom ones are configured", () => {
       const code = `
         import { createSignal } from "solid-js";
         function App() {
@@ -251,9 +251,9 @@ describe("babel-plugin-solid-better-refresh", () => {
         }
       `;
       const output = transform(code, { primitives: ["createMyState"] });
-      // createSignal is NOT in the custom list, so it should not be transformed
-      expect(output).toContain("createSignal(0)");
-      expect(output).not.toContain("__hmr_persist");
+      // createSignal is in the defaults and should still be transformed
+      expect(output).toContain("__hmr_persist");
+      expect(output).not.toContain("createSignal(0)");
     });
   });
 

@@ -122,7 +122,7 @@ export function solidBetterRefreshVite(): Plugin {
 export default function solidBetterRefresh(options: SolidBetterRefreshOptions = {}): Plugin[] {
   let isDev = false;
   const quickCheckNames = options.primitives?.length
-    ? options.primitives
+    ? ["createSignal", "createStore", ...options.primitives]
     : ["createSignal", "createStore"];
 
   return [

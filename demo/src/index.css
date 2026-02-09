@@ -126,3 +126,44 @@ input:focus {
   display: flex;
   gap: 0.5rem;
 }
+
+.demo-section {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid #333;
+  border-radius: 8px;
+}
+
+.demo-section strong {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.demo-section .hint {
+  font-size: 0.8em;
+  color: #888;
+  margin: 0.5rem 0 0;
+}
+
+.demo-section code {
+  background: #2a2a3e;
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.item-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.5rem;
+}
+
+.item-list li {
+  font-size: 0.9em;
+}
+
+.counter-value {
+  font-size: 1.2em;
+  font-weight: 600;
+  min-width: 3ch;
+  text-align: center;
+}
