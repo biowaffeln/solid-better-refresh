@@ -4,7 +4,7 @@ Persist `createSignal` and `createStore` state across HMR updates in SolidJS.
 
 ## Packages
 
-- [`packages/solid-better-refresh`](./packages/solid-better-refresh) — the Vite plugin (publishable to npm)
+- [`packages/solid-better-refresh`](./packages/solid-better-refresh) — the Vite plugin 
 - [`demo`](./demo) — a minimal Solid app wired up to the plugin for manual testing
 
 ## Quick start
