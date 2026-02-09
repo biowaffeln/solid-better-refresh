@@ -20,8 +20,8 @@ import solidBetterRefresh from "solid-better-refresh";
 
 export default defineConfig({
   plugins: [
-    solidBetterRefresh(), // must be before vite-plugin-solid
     solid(),
+    solidBetterRefresh(),
   ],
 });
 ```
