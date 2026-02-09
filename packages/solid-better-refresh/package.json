@@ -1,0 +1,55 @@
+{
+  "name": "solid-better-refresh",
+  "version": "0.0.1",
+  "description": "State-preserving HMR for SolidJS — persist createSignal and createStore across hot module replacements",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./babel": {
+      "import": "./dist/babel-plugin.js",
+      "types": "./dist/babel-plugin.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "solid",
+    "solidjs",
+    "hmr",
+    "hot-module-replacement",
+    "vite",
+    "vite-plugin",
+    "babel-plugin",
+    "developer-experience"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@babel/core": ">=7.20.0",
+    "solid-js": ">=1.7.0",
+    "vite": ">=5.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/types": "^7.29.0",
+    "@types/babel__core": "^7.20.5",
+    "@types/node": "^24.10.1",
+    "solid-js": "^1.9.10",
+    "tsup": "^8.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^3.0.0"
+  }
+}
