@@ -18,8 +18,10 @@ export default function ThemedCard() {
         <span>{theme()} mode</span>
       </div>
       <div class="card-actions">
-        <button onClick={toggle}>Toggle theme</button>
-        <button onClick={() => setClicks((c) => c + 1)}>
+        <button type="button" onClick={toggle}>
+          Toggle theme
+        </button>
+        <button type="button" onClick={() => setClicks((c) => c + 1)}>
           Clicks: {clicks()}
         </button>
       </div>

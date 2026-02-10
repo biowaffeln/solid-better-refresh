@@ -257,6 +257,49 @@ describe("babel-plugin-solid-better-refresh", () => {
     });
   });
 
+  describe("props fingerprinting", () => {
+    it("passes props as 5th arg when component has params", () => {
+      const code = `
+        import { createSignal } from "solid-js";
+        function Counter(props) {
+          const [count, setCount] = createSignal(0);
+          return count();
+        }
+      `;
+      const output = transform(code);
+      expect(output).toContain("__hmr_persist");
+      // Should end with , props)
+      expect(output).toMatch(/,\s*props\)/);
+    });
+
+    it("omits props when component has no params", () => {
+      const code = `
+        import { createSignal } from "solid-js";
+        function App() {
+          const [count, setCount] = createSignal(0);
+          return count();
+        }
+      `;
+      const output = transform(code);
+      expect(output).toContain("__hmr_persist");
+      // Should NOT end with , props)
+      expect(output).not.toMatch(/,\s*props\)/);
+    });
+
+    it("handles arrow function with props", () => {
+      const code = `
+        import { createSignal } from "solid-js";
+        const Counter = (props) => {
+          const [count, setCount] = createSignal(0);
+          return count();
+        };
+      `;
+      const output = transform(code);
+      expect(output).toContain("__hmr_persist");
+      expect(output).toMatch(/,\s*props\)/);
+    });
+  });
+
   describe("structure metadata", () => {
     it("generates correct component primitive counts", () => {
       const code = `

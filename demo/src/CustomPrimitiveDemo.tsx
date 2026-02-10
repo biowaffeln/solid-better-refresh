@@ -11,10 +11,16 @@ export default function CustomPrimitiveDemo() {
         <code>primitives</code> option)
       </p>
       <div class="controls">
-        <button onClick={decrement}>-</button>
+        <button type="button" onClick={decrement}>
+          -
+        </button>
         <span class="counter-value">{count()}</span>
-        <button onClick={increment}>+</button>
-        <button onClick={reset}>Reset</button>
+        <button type="button" onClick={increment}>
+          +
+        </button>
+        <button type="button" onClick={reset}>
+          Reset
+        </button>
       </div>
       <p class="hint">
         Change this text and save — counter should persist at {count()}.

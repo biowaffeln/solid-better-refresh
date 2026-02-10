@@ -43,6 +43,8 @@ describe("solidBetterRefreshVite (runtime plugin)", () => {
     const code = (plugin.load as Function)("\0virtual:solid-better-refresh");
     expect(code).toContain("__hmr_persist");
     expect(code).toContain("factory(...args)");
+    // Prod stub accepts props param but ignores it
+    expect(code).toMatch(/\bprops\b/);
     // Prod stub should not have the caching logic
     expect(code).not.toContain("REGISTRY_KEY");
   });

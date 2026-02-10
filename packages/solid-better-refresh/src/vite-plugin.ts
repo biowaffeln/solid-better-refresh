@@ -31,33 +31,76 @@ try {
 const REGISTRY_KEY = "__hmr_registry";
 const STRUCTURE_KEY = "__hmr_prevStructure";
 const INVALIDATED_KEY = "__hmr_invalidated";
+const INSTANCE_COUNTERS_KEY = "__hmr_instanceCounters";
+
+const pendingResets = new WeakSet();
+function scheduleCursorReset(hotData) {
+  if (!pendingResets.has(hotData)) {
+    pendingResets.add(hotData);
+    queueMicrotask(() => {
+      hotData[INSTANCE_COUNTERS_KEY] = new Map();
+      pendingResets.delete(hotData);
+    });
+  }
+}
 
 function componentFromKey(key) {
   return key.split("::")[1] || "";
 }
 
-export function __hmr_persist(hot, key, factory, args) {
+function isPrimitive(v) {
+  return v == null || (typeof v !== "object" && typeof v !== "function");
+}
+
+function fingerprintProps(props) {
+  if (!props || typeof props !== "object") return null;
+  try {
+    if ("id" in props) { const id = props.id; if (isPrimitive(id)) return "id=" + id; }
+    if ("key" in props) { const k = props.key; if (isPrimitive(k)) return "key=" + k; }
+    const parts = [];
+    for (const k of Object.keys(props).sort()) {
+      try { const v = props[k]; if (isPrimitive(v)) parts.push(k + "=" + v); } catch {}
+    }
+    return parts.length > 0 ? parts.join("&") : null;
+  } catch { return null; }
+}
+
+export function __hmr_persist(hot, key, factory, args, props) {
   if (!hot) return factory(...args);
+
+  scheduleCursorReset(hot.data);
 
   if (!hot.data[REGISTRY_KEY]) hot.data[REGISTRY_KEY] = {};
   const registry = hot.data[REGISTRY_KEY];
-  const invalidated = hot.data[INVALIDATED_KEY];
 
+  const fingerprint = props ? fingerprintProps(props) : null;
+  const counterKey = fingerprint ? key + "::fp:" + fingerprint : key;
+
+  if (!hot.data[INSTANCE_COUNTERS_KEY]) hot.data[INSTANCE_COUNTERS_KEY] = new Map();
+  const counters = hot.data[INSTANCE_COUNTERS_KEY];
+  const instanceNum = counters.get(counterKey) ?? 0;
+  counters.set(counterKey, instanceNum + 1);
+
+  const instanceKey = counterKey + "::" + instanceNum;
+
+  const invalidated = hot.data[INVALIDATED_KEY];
   if (invalidated && invalidated.has(componentFromKey(key))) {
     const result = factory(...args);
-    registry[key] = result;
+    registry[instanceKey] = result;
     return result;
   }
 
-  if (key in registry) return registry[key];
+  if (instanceKey in registry) return registry[instanceKey];
 
   const result = factory(...args);
-  registry[key] = result;
+  registry[instanceKey] = result;
   return result;
 }
 
 export function __hmr_checkStructure(hotData, structure) {
   if (!hotData) return;
+
+  hotData[INSTANCE_COUNTERS_KEY] = new Map();
 
   const prev = hotData[STRUCTURE_KEY];
   if (prev) {
@@ -83,7 +126,7 @@ export function __hmr_checkStructure(hotData, structure) {
 }
 
 const PROD_STUB = `
-export function __hmr_persist(hot, key, factory, args) {
+export function __hmr_persist(hot, key, factory, args, props) {
   return factory(...args);
 }
 export function __hmr_checkStructure() {}

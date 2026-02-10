@@ -205,15 +205,24 @@ export default function solidBetterRefreshBabelPlugin(
 
         const argsArray = t.arrayExpression(originalArgs as t.Expression[]);
 
+        const persistArgs: t.Expression[] = [
+          importMetaHot,
+          t.stringLiteral(stableKey),
+          t.isIdentifier(callee)
+            ? t.identifier(callee.name)
+            : (callee as t.Expression),
+          argsArray,
+        ];
+
+        // If the component function has a props parameter, pass it through
+        // for fingerprint-based instance matching (reorder resilience)
+        const fnNode = component.node as t.FunctionDeclaration | t.FunctionExpression | t.ArrowFunctionExpression;
+        if (fnNode.params.length > 0 && t.isIdentifier(fnNode.params[0])) {
+          persistArgs.push(t.identifier(fnNode.params[0].name));
+        }
+
         path.replaceWith(
-          t.callExpression(t.identifier("__hmr_persist"), [
-            importMetaHot,
-            t.stringLiteral(stableKey),
-            t.isIdentifier(callee)
-              ? t.identifier(callee.name)
-              : (callee as t.Expression),
-            argsArray,
-          ])
+          t.callExpression(t.identifier("__hmr_persist"), persistArgs)
         );
 
         path.skip();

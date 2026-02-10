@@ -3,6 +3,7 @@ import { ThemeProvider } from "./ThemeContext";
 import ThemedCard from "./ThemedCard";
 import StoreDemo from "./StoreDemo";
 import CustomPrimitiveDemo from "./CustomPrimitiveDemo";
+import { Counter } from "./Counter";
 
 function App() {
   const [count, setCount] = createSignal(0);
@@ -27,6 +28,13 @@ function App() {
         <ThemedCard />
         <StoreDemo />
         <CustomPrimitiveDemo />
+      </div>
+      <div class="demo-section">
+        <strong>Multiple Instances Demo 1</strong>
+        <Counter>Increment</Counter>
+        <Counter>Increment</Counter>
+        <Counter>Increment</Counter>
+        <Counter>Increment</Counter>
       </div>
     </ThemeProvider>
   );

@@ -25,6 +25,25 @@ interface StructureMap {
 const REGISTRY_KEY = "__hmr_registry";
 const STRUCTURE_KEY = "__hmr_prevStructure";
 const INVALIDATED_KEY = "__hmr_invalidated";
+const INSTANCE_COUNTERS_KEY = "__hmr_instanceCounters";
+
+/**
+ * Track which hot.data objects have a pending microtask counter reset.
+ * After each synchronous render batch completes, the microtask fires
+ * and resets instance counters — so the next render (whether triggered
+ * by this module's own HMR or a parent's) starts counting from 0.
+ */
+const pendingResets = new WeakSet<object>();
+
+function scheduleCursorReset(hotData: Record<string, unknown>): void {
+  if (!pendingResets.has(hotData)) {
+    pendingResets.add(hotData);
+    queueMicrotask(() => {
+      hotData[INSTANCE_COUNTERS_KEY] = new Map<string, number>();
+      pendingResets.delete(hotData);
+    });
+  }
+}
 
 /**
  * Extract the component name from a persist key.
@@ -34,35 +53,86 @@ function componentFromKey(key: string): string {
   return key.split("::")[1] ?? "";
 }
 
+function isPrimitive(v: unknown): boolean {
+  return v == null || (typeof v !== "object" && typeof v !== "function");
+}
+
+function fingerprintProps(props: Record<string, unknown>): string | null {
+  if (!props || typeof props !== "object") return null;
+  try {
+    // Fast path: common identity fields
+    if ("id" in props) {
+      const id = props.id;
+      if (isPrimitive(id)) return `id=${id}`;
+    }
+    if ("key" in props) {
+      const k = props.key;
+      if (isPrimitive(k)) return `key=${k}`;
+    }
+    // Slow path: hash all primitive props
+    const parts: string[] = [];
+    for (const k of Object.keys(props).sort()) {
+      try {
+        const v = props[k];
+        if (isPrimitive(v)) parts.push(`${k}=${v}`);
+      } catch {}
+    }
+    return parts.length > 0 ? parts.join("&") : null;
+  } catch {
+    return null;
+  }
+}
+
 export function __hmr_persist(
   hot: ViteHot | undefined | null,
   key: string,
   factory: ReactiveFactory,
-  args: unknown[]
+  args: unknown[],
+  props?: Record<string, unknown>
 ): unknown {
   if (!hot) {
     return factory(...args);
   }
+
+  // Schedule counter reset after this synchronous render batch
+  scheduleCursorReset(hot.data);
 
   if (!hot.data[REGISTRY_KEY]) {
     hot.data[REGISTRY_KEY] = {};
   }
 
   const registry = hot.data[REGISTRY_KEY] as HmrRegistry;
-  const invalidated = hot.data[INVALIDATED_KEY] as Set<string> | null | undefined;
 
+  // Build counter key incorporating fingerprint for reorder resilience
+  const fingerprint = props ? fingerprintProps(props) : null;
+  const counterKey = fingerprint ? `${key}::fp:${fingerprint}` : key;
+
+  // Get/increment instance counter (lazy-init the Map if needed)
+  if (!hot.data[INSTANCE_COUNTERS_KEY]) {
+    hot.data[INSTANCE_COUNTERS_KEY] = new Map<string, number>();
+  }
+  const counters = hot.data[INSTANCE_COUNTERS_KEY] as Map<string, number>;
+  const instanceNum = counters.get(counterKey) ?? 0;
+  counters.set(counterKey, instanceNum + 1);
+
+  const instanceKey = `${counterKey}::${instanceNum}`;
+
+  // Check invalidation using static key (component-level)
+  const invalidated = hot.data[INVALIDATED_KEY] as Set<string> | null | undefined;
   if (invalidated && invalidated.has(componentFromKey(key))) {
     const result = factory(...args);
-    registry[key] = result;
+    registry[instanceKey] = result;
     return result;
   }
 
-  if (key in registry) {
-    return registry[key];
+  // Restore from cache if available
+  if (instanceKey in registry) {
+    return registry[instanceKey];
   }
 
+  // Not found — create fresh
   const result = factory(...args);
-  registry[key] = result;
+  registry[instanceKey] = result;
   return result;
 }
 
@@ -71,6 +141,9 @@ export function __hmr_checkStructure(
   structure: StructureMap
 ): void {
   if (!hotData) return;
+
+  // Reset instance counters for this cycle
+  hotData[INSTANCE_COUNTERS_KEY] = new Map<string, number>();
 
   const prevStructure = hotData[STRUCTURE_KEY] as StructureMap | undefined;
 
