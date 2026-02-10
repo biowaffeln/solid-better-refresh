@@ -53,23 +53,25 @@ wraps the component function, it doesn't transform the signal primitives.
 #### Step 2: Our Babel Plugin Transforms (runs after solid, despite `enforce: "pre"`)
 
 ```js
-var Counter = _$component(_REGISTRY, "Counter", function Counter() {
+var Counter = _$component(_REGISTRY, "Counter", function Counter(props) {
   const [count, setCount] = __hmr_persist(
     import.meta.hot,
     "src/Counter.tsx::Counter::signal::0",
     createSignal,
-    [0]
+    [0],
+    props   // 5th arg: passed for fingerprinting when component has a props param
   );
   const [name, setName] = __hmr_persist(
     import.meta.hot,
     "src/Counter.tsx::Counter::signal::1",
     createSignal,
-    ["world"]
+    ["world"],
+    props
   );
   // ...compiled DOM creation code...
 });
 
-// Injected at end of file:
+// Injected after imports, before component definitions:
 __hmr_checkStructure(import.meta.hot?.data, { "Counter": 2 });
 ```
 
@@ -78,20 +80,31 @@ checking `FunctionExpression.id.name` for PascalCase — this matches the
 `function Counter() { ... }` named function expression that solid-refresh preserves
 as its third argument to `_$component()`.
 
+If the component function has a first parameter that's an Identifier (e.g. `props`),
+it's injected as the 5th argument to `__hmr_persist` for props fingerprinting.
+Components with no params (propless singletons) keep 4 args.
+
 #### Step 3: Browser Loads the Module (first load)
 
 ```
+__hmr_checkStructure(hot.data, { Counter: 2 })
+  → No previous structure, stores { Counter: 2 } for next time
+  → Resets instance counters to new Map
+
 __hmr_persist called with key "...::Counter::signal::0"
-  → hot.data.__hmr_registry is empty
-  → Calls createSignal(0), stores [getter, setter] in registry
+  → Schedules microtask to reset instance counters after this render batch
+  → Instance counter for this key: 0 (increments to 1)
+  → Registry key: "...::Counter::signal::0::0"
+  → Registry is empty → calls createSignal(0), stores in registry
   → Returns [getter, setter] ← count is 0
 
 __hmr_persist called with key "...::Counter::signal::1"
+  → Instance counter for this key: 0 (increments to 1)
+  → Registry key: "...::Counter::signal::1::0"
   → Calls createSignal("world"), stores in registry
   → Returns [getter, setter] ← name is "world"
 
-__hmr_checkStructure({ Counter: 2 })
-  → No previous structure, stores { Counter: 2 } for next time
+Microtask fires → resets instance counters to new Map
 
 Component renders normally. User clicks +1 a few times. count is now 5.
 ```
@@ -114,17 +127,18 @@ solid-refresh disposes the old component's reactive subtree
 
 New module code executes:
 
+__hmr_checkStructure(hot.data, { Counter: 2 })
+  → Previous: { Counter: 2 }, Current: { Counter: 2 }
+  → Match! Keep registry intact.
+  → Resets instance counters
+
 __hmr_persist called with key "...::Counter::signal::0"
-  → hot.data.__hmr_registry["...::signal::0"] EXISTS!
-  → Returns the SAME [getter, setter] from before ← count is still 5! ✓
+  → Instance counter: 0, registry key: "...::Counter::signal::0::0"
+  → Registry HIT → returns the SAME [getter, setter] ← count is still 5! ✓
 
 __hmr_persist called with key "...::Counter::signal::1"
-  → Registry hit!
-  → Returns the SAME [getter, setter] ← name is still "world" ✓
-
-__hmr_checkStructure({ Counter: 2 })
-  → Previous structure was { Counter: 2 }, current is { Counter: 2 }
-  → Match! Keep registry intact.
+  → Instance counter: 0, registry key: "...::Counter::signal::1::0"
+  → Registry HIT → returns the SAME [getter, setter] ← name is still "world" ✓
 
 Component renders with new JSX template but OLD signal values.
 The button still works, count continues from 5.
@@ -191,10 +205,12 @@ This matches React Fast Refresh's behavior: structural changes to hooks cause a 
                      │          │
                      │  import.meta.hot.data ─── persisted across HMR ───┐
                      │    .__hmr_registry                                │
-                     │      "Counter::signal::0" → [getter, setter] ◄───┘
-                     │      "Counter::signal::1" → [getter, setter]
+                     │      "Counter::signal::0::0" → [getter, setter] ◄┘
+                     │      "Counter::signal::1::0" → [getter, setter]
                      │    .__hmr_prevStructure
                      │      { Counter: 2 }
+                     │    .__hmr_instanceCounters
+                     │      Map { "Counter::signal::0" → 1, ... }
                      │
                      └──────────┘
 ```
@@ -247,6 +263,28 @@ is that reordering signals without adding/removing them could cause state to "sw
 between variables — but this is a very rare edit pattern, and the structural change
 detection would catch it if the types differ.
 
+### Multi-instance disambiguation
+
+When the same component is rendered multiple times (`<Counter /><Counter /><Counter />`),
+each instance needs its own registry slot. We use a per-key instance counter that
+increments on each `__hmr_persist` call and resets between render cycles.
+
+**Counter reset via two mechanisms (belt and suspenders):**
+- `__hmr_checkStructure` resets counters synchronously when a module re-executes (own-module HMR)
+- `scheduleCursorReset` uses `queueMicrotask` to reset after each synchronous render batch
+  (handles cross-module re-renders where a parent's HMR triggers child re-render without
+  the child's module re-executing)
+
+**Props fingerprinting** provides reorder resilience. When a component has a `props`
+parameter, the babel plugin passes it as the 5th arg to `__hmr_persist`. The runtime
+fingerprints it — fast path for `id`/`key` props, slow path hashing all primitive
+prop values. The fingerprint is incorporated into the counter key, so instances with
+different props get independent counter namespaces.
+
+Registry key format:
+- Positional (no props): `filename::ComponentName::type::index::instanceNum`
+- With fingerprint: `filename::ComponentName::type::index::fp:id=42::instanceNum`
+
 ### Why persist signals but not effects?
 
 Effects (`createEffect`) and memos (`createMemo`) are DERIVED state — they compute
@@ -267,15 +305,17 @@ This happens naturally:
 ## File Structure
 
 ```
-solid-plugin-hmr/src/hmr/
+packages/solid-better-refresh/src/
 ├── babel-plugin.ts    # AST transform: createSignal → __hmr_persist
-├── runtime.ts         # Typed reference for the browser runtime (not served directly)
-├── vite-plugin.ts     # Vite integration: serves INLINE_RUNTIME + runs transform
+├── runtime.ts         # Browser runtime, built by tsup → dist/runtime.js
+├── vite-plugin.ts     # Vite integration: serves runtime + runs transform
+├── index.ts           # Re-exports vite plugin (default + named)
 └── ARCHITECTURE.md    # This file
 ```
 
-Note: `runtime.ts` is a typed reference only. The actual code served to the browser
-is the `INLINE_RUNTIME` string inside `vite-plugin.ts`. Keep them in sync.
+`runtime.ts` is built by tsup into `dist/runtime.js`, which the vite plugin reads
+via `fs.readFileSync` at startup. An inline fallback string inside `vite-plugin.ts`
+is used when the built file isn't available (e.g. during dev of this package itself).
 
 ---
 
@@ -283,17 +323,22 @@ is the `INLINE_RUNTIME` string inside `vite-plugin.ts`. Keep them in sync.
 
 ### Current Limitations
 
-1. **Structural changes reset all state** — Adding or removing a single signal
-   resets ALL signals in that component. A smarter diffing algorithm could
-   preserve unaffected signals.
+1. **Structural changes reset the affected component's state** — Adding or removing
+   a signal resets all signals in that component. Other components in the same file
+   are unaffected. A smarter diffing algorithm could preserve unaffected signals.
 
-2. **No createResource support** — Resources involve async state and could be
+2. **Identical propless multi-instances** — When the same component is rendered
+   multiple times without distinguishing props, state is matched by render position.
+   If the framework re-renders instances in a different order during HMR, state
+   may swap between instances. Fix: add `id` or `key` props.
+
+3. **No createResource support** — Resources involve async state and could be
    persisted similarly, but the refetch/loading state makes it trickier.
 
-3. **Context values not persisted** — If a component creates a context provider
+4. **Context values not persisted** — If a component creates a context provider
    with a signal, the signal is persisted but consumers may need to re-subscribe.
 
-4. **Signals in loops/conditionals** — `createSignal` inside a `for` loop or
+5. **Signals in loops/conditionals** — `createSignal` inside a `for` loop or
    conditional branch is tricky to key stably. The current approach counts them
    in call order, which breaks if the branch condition changes.
 

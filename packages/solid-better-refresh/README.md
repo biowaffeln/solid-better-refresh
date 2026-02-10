@@ -30,7 +30,9 @@ export default defineConfig({
 
 A Babel transform rewrites `createSignal()` and `createStore()` calls inside components to use a persistence wrapper. On HMR update, the wrapper returns the previously cached signal/store instead of creating a new one.
 
-A structure check detects when you add or remove signals/stores from a component. When the structure changes, all cached state for that module is invalidated and recreated fresh.
+Each component instance gets its own registry slot, so `<Counter /><Counter /><Counter />` all maintain independent state. If components have distinguishing props (like `id` or `key`), the plugin fingerprints them for reorder resilience — list items that swap positions keep their correct state.
+
+A structure check detects when you add or remove signals/stores from a component. When the structure changes, cached state for that component is invalidated and recreated fresh.
 
 ## Options
 
@@ -72,6 +74,25 @@ Signals inside non-PascalCase functions (like `useCounter()`) are not transforme
   const [checked, setChecked] = createSignal(false);
   return <input checked={checked()} />;
 }}</For>
+```
+
+### Multiple identical instances without props
+
+When the same component is rendered multiple times without distinguishing props, state is matched by render position. If the framework re-renders instances in a different order during HMR (e.g. when editing the component's own file), state may swap between instances.
+
+**Fix:** Add an `id` or `key` prop to each instance:
+
+```tsx
+// State persists correctly across HMR, even if render order changes
+<Counter key={1} />
+<Counter key={2} />
+<Counter key={3} />
+```
+
+The component must accept a props parameter for fingerprinting to work:
+
+```tsx
+function Counter(props: { key: number }) { ... }
 ```
 
 ### createResource
