@@ -67,20 +67,6 @@ describe("babel-plugin-solid-better-refresh", () => {
   });
 
   describe("skip cases", () => {
-    it("does NOT wrap module-scope signals", () => {
-      const code = `
-        import { createSignal } from "solid-js";
-        const [count, setCount] = createSignal(0);
-        function App() {
-          return count();
-        }
-      `;
-      const output = transform(code);
-      // createSignal at module scope should remain untouched
-      expect(output).toContain("createSignal(0)");
-      expect(output).not.toContain("__hmr_persist");
-    });
-
     it("does NOT wrap signals in non-PascalCase functions", () => {
       const code = `
         import { createSignal } from "solid-js";
@@ -297,6 +283,72 @@ describe("babel-plugin-solid-better-refresh", () => {
       const output = transform(code);
       expect(output).toContain("__hmr_persist");
       expect(output).toMatch(/,\s*props\)/);
+    });
+  });
+
+  describe("module-scope signals", () => {
+    it("wraps module-scope createSignal with __module__ key", () => {
+      const code = `
+        import { createSignal } from "solid-js";
+        const [count, setCount] = createSignal(0);
+      `;
+      const output = transform(code);
+      expect(output).toContain("__hmr_persist");
+      expect(output).toContain("__module__::signal::0");
+    });
+
+    it("wraps module-scope createStore", () => {
+      const code = `
+        import { createStore } from "solid-js/store";
+        const [state, setState] = createStore({ x: 1 });
+      `;
+      const output = transform(code);
+      expect(output).toContain("__hmr_persist");
+      expect(output).toContain("__module__::store::0");
+    });
+
+    it("coexists with component-scope signals", () => {
+      const code = `
+        import { createSignal } from "solid-js";
+        const [global, setGlobal] = createSignal("hello");
+        function App() {
+          const [local, setLocal] = createSignal(0);
+          return local();
+        }
+      `;
+      const output = transform(code);
+      expect(output).toContain("__module__::signal::0");
+      expect(output).toContain("App::signal::0");
+      // Both should be wrapped
+      expect(output).not.toContain('createSignal("hello")');
+      expect(output).not.toContain("createSignal(0)");
+    });
+
+    it("includes __module__ in structure metadata", () => {
+      const code = `
+        import { createSignal } from "solid-js";
+        const [global, setGlobal] = createSignal(0);
+        function App() {
+          const [local, setLocal] = createSignal(0);
+          return local();
+        }
+      `;
+      const output = transform(code);
+      expect(output).toContain("__module__: 1");
+      expect(output).toContain("App: 1");
+    });
+
+    it("does NOT wrap signals inside non-component functions at module scope", () => {
+      const code = `
+        import { createSignal } from "solid-js";
+        function helper() {
+          const [count, setCount] = createSignal(0);
+          return count;
+        }
+      `;
+      const output = transform(code);
+      expect(output).toContain("createSignal(0)");
+      expect(output).not.toContain("__hmr_persist");
     });
   });
 

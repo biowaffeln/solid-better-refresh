@@ -39,7 +39,7 @@ export default function solidBetterRefreshBabelPlugin(
 
   function findEnclosingComponent(
     path: NodePath
-  ): { name: string; node: t.Node } | null {
+  ): { name: string; node: t.Node | null } | null {
     let current = path.parentPath;
     // Track whether we've crossed a function boundary that ISN'T the component.
     // If we hit a non-component function before finding a component, the signal
@@ -79,6 +79,12 @@ export default function solidBetterRefreshBabelPlugin(
       }
 
       current = current.parentPath;
+    }
+
+    // If we reached the top without crossing any function boundary,
+    // this is a module-scope primitive — persist it under __module__
+    if (!crossedFunctionBoundary) {
+      return { name: "__module__", node: null };
     }
 
     return null;
@@ -216,9 +222,11 @@ export default function solidBetterRefreshBabelPlugin(
 
         // If the component function has a props parameter, pass it through
         // for fingerprint-based instance matching (reorder resilience)
-        const fnNode = component.node as t.FunctionDeclaration | t.FunctionExpression | t.ArrowFunctionExpression;
-        if (fnNode.params.length > 0 && t.isIdentifier(fnNode.params[0])) {
-          persistArgs.push(t.identifier(fnNode.params[0].name));
+        if (component.node) {
+          const fnNode = component.node as t.FunctionDeclaration | t.FunctionExpression | t.ArrowFunctionExpression;
+          if (fnNode.params.length > 0 && t.isIdentifier(fnNode.params[0])) {
+            persistArgs.push(t.identifier(fnNode.params[0].name));
+          }
         }
 
         path.replaceWith(
