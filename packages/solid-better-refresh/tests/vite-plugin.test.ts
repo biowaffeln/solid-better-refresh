@@ -34,6 +34,7 @@ describe("solidBetterRefreshVite (runtime plugin)", () => {
     expect(code).toContain("__hmr_persist");
     expect(code).toContain("__hmr_checkStructure");
     expect(code).toContain("REGISTRY_KEY");
+    expect(code).toContain("__hmrSite");
   });
 
   it("serves passthrough stub in prod mode", () => {

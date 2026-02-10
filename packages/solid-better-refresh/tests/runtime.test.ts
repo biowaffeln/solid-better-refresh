@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { __hmr_persist, __hmr_checkStructure } from "../src/runtime";
 
 function makeHotData(): Record<string, unknown> {
@@ -431,6 +431,57 @@ describe("cross-module re-render (parent HMR)", () => {
 });
 
 describe("props fingerprinting", () => {
+  it("prefers __hmrSite over id and key", () => {
+    const hot = makeHot();
+
+    // Cycle 0: same id/key, different __hmrSite
+    cycle(hot, { Counter: 1 });
+    let callCount = 0;
+    const factory = () => {
+      callCount++;
+      return `state-${callCount}`;
+    };
+
+    const a = __hmr_persist(
+      hot,
+      "file::Counter::signal::0",
+      factory,
+      [],
+      { __hmrSite: "site-a", id: "same", key: 1 }
+    );
+    const b = __hmr_persist(
+      hot,
+      "file::Counter::signal::0",
+      factory,
+      [],
+      { __hmrSite: "site-b", id: "same", key: 1 }
+    );
+    expect(a).toBe("state-1");
+    expect(b).toBe("state-2");
+    expect(callCount).toBe(2);
+
+    // Cycle 1: reversed call order still restores by __hmrSite identity
+    cycle(hot, { Counter: 1 });
+    const b2 = __hmr_persist(
+      hot,
+      "file::Counter::signal::0",
+      factory,
+      [],
+      { __hmrSite: "site-b", id: "same", key: 1 }
+    );
+    const a2 = __hmr_persist(
+      hot,
+      "file::Counter::signal::0",
+      factory,
+      [],
+      { __hmrSite: "site-a", id: "same", key: 1 }
+    );
+
+    expect(b2).toBe("state-2");
+    expect(a2).toBe("state-1");
+    expect(callCount).toBe(2);
+  });
+
   it("components with different props.id restore correctly after reorder", () => {
     const hot = makeHot();
 
@@ -469,8 +520,8 @@ describe("props fingerprinting", () => {
       return `state-${callCount}`;
     };
 
-    const a = __hmr_persist(hot, "file::Counter::signal::0", factory, [], { onClick: () => {} });
-    const b = __hmr_persist(hot, "file::Counter::signal::0", factory, [], { onClick: () => {} });
+    __hmr_persist(hot, "file::Counter::signal::0", factory, [], { onClick: () => {} });
+    __hmr_persist(hot, "file::Counter::signal::0", factory, [], { onClick: () => {} });
     expect(callCount).toBe(2);
 
     // Cycle 1: same order, should restore positionally
@@ -502,5 +553,45 @@ describe("props fingerprinting", () => {
     const result2 = __hmr_persist(hot, "file::App::signal::0", factory, []);
     expect(result2).toBe("state-1"); // restored
     expect(callCount).toBe(1);
+  });
+
+  it("warns once for ambiguous duplicate identity buckets", () => {
+    const hot = makeHot();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    cycle(hot, { Counter: 1 });
+    let callCount = 0;
+    const factory = () => {
+      callCount++;
+      return `state-${callCount}`;
+    };
+
+    __hmr_persist(hot, "file::Counter::signal::0", factory, []);
+    __hmr_persist(hot, "file::Counter::signal::0", factory, []);
+    __hmr_persist(hot, "file::Counter::signal::0", factory, []);
+
+    cycle(hot, { Counter: 1 });
+    __hmr_persist(hot, "file::Counter::signal::0", factory, []);
+    __hmr_persist(hot, "file::Counter::signal::0", factory, []);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toContain("ambiguous HMR identity");
+
+    warnSpy.mockRestore();
+  });
+
+  it("warns for duplicate instances that only share __hmrSite identity", () => {
+    const hot = makeHot();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    cycle(hot, { Counter: 1 });
+    const factory = () => "state";
+
+    __hmr_persist(hot, "file::Counter::signal::0", factory, [], { __hmrSite: "loop-site" });
+    __hmr_persist(hot, "file::Counter::signal::0", factory, [], { __hmrSite: "loop-site" });
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toContain("ambiguous HMR identity");
+    warnSpy.mockRestore();
   });
 });

@@ -30,7 +30,7 @@ export default defineConfig({
 
 A Babel transform rewrites `createSignal()` and `createStore()` calls inside components to use a persistence wrapper. On HMR update, the wrapper returns the previously cached signal/store instead of creating a new one.
 
-Each component instance gets its own registry slot, so `<Counter /><Counter /><Counter />` all maintain independent state. If components have distinguishing props (like `id` or `key`), the plugin fingerprints them for reorder resilience — list items that swap positions keep their correct state.
+Each component instance gets its own registry slot, so `<Counter /><Counter /><Counter />` all maintain independent state. The transform injects an internal call-site identity (`__hmrSite`) for component usages, which significantly reduces state swaps for duplicate sibling instances without requiring user props. If the component also has distinguishing props (like `id` or `key`), those remain part of fallback fingerprinting.
 
 A structure check detects when you add or remove signals/stores from a component. When the structure changes, cached state for that component is invalidated and recreated fresh.
 
@@ -78,9 +78,9 @@ Signals inside non-PascalCase functions (like `useCounter()`) are not transforme
 
 ### Multiple identical instances without props
 
-When the same component is rendered multiple times without distinguishing props, state is matched by render position. If the framework re-renders instances in a different order during HMR (e.g. when editing the component's own file), state may swap between instances.
+When the same component is rendered multiple times without distinguishing props, the plugin first uses internal `__hmrSite` call-site identity to match instances. This handles static sibling duplicates much more reliably than pure positional matching.
 
-**Fix:** Add an `id` or `key` prop to each instance:
+Fallback identity still supports `id` and `key`:
 
 ```tsx
 // State persists correctly across HMR, even if render order changes
@@ -89,7 +89,7 @@ When the same component is rendered multiple times without distinguishing props,
 <Counter key={3} />
 ```
 
-The component must accept a props parameter for fingerprinting to work:
+For fingerprinting to work, the component must accept a props parameter:
 
 ```tsx
 function Counter(props: { key: number }) { ... }

@@ -26,6 +26,7 @@ const REGISTRY_KEY = "__hmr_registry";
 const STRUCTURE_KEY = "__hmr_prevStructure";
 const INVALIDATED_KEY = "__hmr_invalidated";
 const INSTANCE_COUNTERS_KEY = "__hmr_instanceCounters";
+const WARNED_AMBIGUOUS_KEY = "__hmr_warnedAmbiguous";
 
 /**
  * Track which hot.data objects have a pending microtask counter reset.
@@ -57,9 +58,30 @@ function isPrimitive(v: unknown): boolean {
   return v == null || (typeof v !== "object" && typeof v !== "function");
 }
 
+function hasPrimitiveIdentity(props?: Record<string, unknown>): boolean {
+  if (!props || typeof props !== "object") return false;
+  if ("id" in props && isPrimitive(props.id)) return true;
+  if ("key" in props && isPrimitive(props.key)) return true;
+  return false;
+}
+
+function isDevMode(): boolean {
+  try {
+    // Runtime module only ships in dev, but keep this guard explicit.
+    return typeof process === "undefined" || process.env.NODE_ENV !== "production";
+  } catch {
+    return true;
+  }
+}
+
 function fingerprintProps(props: Record<string, unknown>): string | null {
   if (!props || typeof props !== "object") return null;
   try {
+    // Internal call-site identity (injected by transform) has highest priority.
+    if ("__hmrSite" in props) {
+      const site = props.__hmrSite;
+      if (isPrimitive(site)) return `site=${site}`;
+    }
     // Fast path: common identity fields
     if ("id" in props) {
       const id = props.id;
@@ -115,11 +137,28 @@ export function __hmr_persist(
   const instanceNum = counters.get(counterKey) ?? 0;
   counters.set(counterKey, instanceNum + 1);
 
+  const isSiteOnly = !!fingerprint && fingerprint.startsWith("site=");
+  const ambiguousByPosition = !fingerprint || (isSiteOnly && !hasPrimitiveIdentity(props));
+  // Duplicate instances with positional matching may swap on reorder.
+  if (ambiguousByPosition && instanceNum > 0 && isDevMode()) {
+    if (!hot.data[WARNED_AMBIGUOUS_KEY]) {
+      hot.data[WARNED_AMBIGUOUS_KEY] = new Set<string>();
+    }
+    const warned = hot.data[WARNED_AMBIGUOUS_KEY] as Set<string>;
+    if (!warned.has(counterKey)) {
+      warned.add(counterKey);
+      console.warn(
+        `[solid-better-refresh] ambiguous HMR identity for duplicate instances of "${componentFromKey(key)}". ` +
+          `State is positional and may swap after refresh.`
+      );
+    }
+  }
+
   const instanceKey = `${counterKey}::${instanceNum}`;
 
   // Check invalidation using static key (component-level)
   const invalidated = hot.data[INVALIDATED_KEY] as Set<string> | null | undefined;
-  if (invalidated && invalidated.has(componentFromKey(key))) {
+  if (invalidated?.has(componentFromKey(key))) {
     const result = factory(...args);
     registry[instanceKey] = result;
     return result;

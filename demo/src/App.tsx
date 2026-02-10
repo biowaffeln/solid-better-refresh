@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createSignal, For } from "solid-js";
 import { ThemeProvider } from "./ThemeContext";
 import ThemedCard from "./ThemedCard";
 import StoreDemo from "./StoreDemo";
@@ -30,11 +30,19 @@ function App() {
         <CustomPrimitiveDemo />
       </div>
       <div class="demo-section">
-        <strong>Multiple Instances Demo 1</strong>
-        <Counter>Increment</Counter>
-        <Counter>Increment</Counter>
-        <Counter>Increment</Counter>
-        <Counter>Increment</Counter>
+        <strong>Multiple Instances Demo</strong>
+        <Counter />
+        <Counter />
+        <Counter />
+        <Counter />
+      </div>
+      <div class="demo-section">
+        <strong>Known Edge Case: Loop Without Identity</strong>
+        <p>
+          This intentionally renders duplicate Counters from one call-site.
+          Check browser console for an ambiguous identity warning.
+        </p>
+        <For each={[1, 2, 3, 4]}>{() => <Counter />}</For>
       </div>
     </ThemeProvider>
   );

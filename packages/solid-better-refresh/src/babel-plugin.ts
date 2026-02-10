@@ -106,12 +106,83 @@ export default function solidBetterRefreshBabelPlugin(
     return null;
   }
 
+  function hashString(input: string): string {
+    let h = 2166136261;
+    for (let i = 0; i < input.length; i++) {
+      h ^= input.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(36);
+  }
+
+  function sitePath(path: NodePath): string {
+    const parts: string[] = [];
+    let current: NodePath | null = path;
+    while (current && !current.isProgram()) {
+      if (current.inList && typeof current.key === "number") {
+        parts.push(`${current.listKey}:${current.key}`);
+      }
+      current = current.parentPath;
+    }
+    return parts.reverse().join("/");
+  }
+
+  function siteKey(state: PluginState, componentName: string, path: NodePath): string {
+    const raw = `${state.filename}::${componentName}::${sitePath(path)}`;
+    return hashString(raw);
+  }
+
+  function isComponentJsxName(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName): boolean {
+    if (t.isJSXIdentifier(name)) {
+      return /^[A-Z]/.test(name.name);
+    }
+    if (t.isJSXMemberExpression(name)) {
+      let object: t.JSXMemberExpression["object"] = name.object;
+      while (t.isJSXMemberExpression(object)) {
+        object = object.object;
+      }
+      return t.isJSXIdentifier(object) && /^[A-Z]/.test(object.name);
+    }
+    return false;
+  }
+
+  function isCreateComponentCall(callee: t.Expression | t.V8IntrinsicIdentifier): boolean {
+    if (t.isIdentifier(callee)) return /createComponent$/.test(callee.name);
+    if (t.isMemberExpression(callee) && t.isIdentifier(callee.property)) {
+      return /createComponent$/.test(callee.property.name);
+    }
+    return false;
+  }
+
+  function findNearestComponentName(path: NodePath): string | null {
+    let current = path.parentPath;
+    while (current) {
+      if (current.isFunctionDeclaration()) {
+        const name = current.node.id?.name;
+        if (name && /^[A-Z]/.test(name)) return name;
+      }
+      if (current.isFunctionExpression()) {
+        const name = current.node.id?.name;
+        if (name && /^[A-Z]/.test(name)) return name;
+      }
+      if (current.isArrowFunctionExpression()) {
+        const parent = current.parentPath;
+        if (parent?.isVariableDeclarator()) {
+          const id = parent.node.id;
+          if (t.isIdentifier(id) && /^[A-Z]/.test(id.name)) return id.name;
+        }
+      }
+      current = current.parentPath;
+    }
+    return null;
+  }
+
   return {
     name: "solid-better-refresh",
 
     visitor: {
       Program: {
-        enter(path, state) {
+        enter(_path, state) {
           state.hasInjectedImport = false;
           state.counters = new Map();
           state.componentPrimitiveCounts = new Map();
@@ -152,6 +223,31 @@ export default function solidBetterRefreshBabelPlugin(
       },
 
       CallExpression(path, state) {
+        // Inject internal call-site identity for post-compiled Solid output:
+        // _createComponent(Counter, { ... }) / _$createComponent(...)
+        if (isCreateComponentCall(path.node.callee)) {
+          const componentName = findNearestComponentName(path);
+          const propsArg = path.node.arguments[1];
+          if (
+            componentName &&
+            propsArg &&
+            t.isObjectExpression(propsArg) &&
+            !propsArg.properties.some(
+              (p) =>
+                t.isObjectProperty(p) &&
+                t.isIdentifier(p.key) &&
+                p.key.name === "__hmrSite"
+            )
+          ) {
+            propsArg.properties.unshift(
+              t.objectProperty(
+                t.identifier("__hmrSite"),
+                t.stringLiteral(siteKey(state, componentName, path))
+              )
+            );
+          }
+        }
+
         const callee = path.node.callee;
         const primitiveName = getMatchedPrimitive(callee);
         if (!primitiveName) return;
@@ -234,6 +330,27 @@ export default function solidBetterRefreshBabelPlugin(
         );
 
         path.skip();
+      },
+
+      JSXOpeningElement(path, state) {
+        if (!isComponentJsxName(path.node.name)) return;
+        if (
+          path.node.attributes.some(
+            (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === "__hmrSite"
+          )
+        ) {
+          return;
+        }
+
+        const component = findEnclosingComponent(path);
+        if (!component) return;
+
+        path.node.attributes.push(
+          t.jsxAttribute(
+            t.jsxIdentifier("__hmrSite"),
+            t.stringLiteral(siteKey(state, component.name, path))
+          )
+        );
       },
     },
   };

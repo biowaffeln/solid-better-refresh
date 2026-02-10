@@ -3,7 +3,6 @@ import { createSignal } from "solid-js";
 /** Custom primitive — wraps createSignal with increment/decrement helpers */
 export function createCounter(initial = 0) {
   const [count, setCount] = createSignal(initial);
-  console.log("hii");
 
   return {
     count,

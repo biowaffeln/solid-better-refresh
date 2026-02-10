@@ -275,15 +275,23 @@ increments on each `__hmr_persist` call and resets between render cycles.
   (handles cross-module re-renders where a parent's HMR triggers child re-render without
   the child's module re-executing)
 
-**Props fingerprinting** provides reorder resilience. When a component has a `props`
-parameter, the babel plugin passes it as the 5th arg to `__hmr_persist`. The runtime
-fingerprints it — fast path for `id`/`key` props, slow path hashing all primitive
-prop values. The fingerprint is incorporated into the counter key, so instances with
-different props get independent counter namespaces.
+**Call-site + props fingerprinting** provides reorder resilience. For component usages,
+the transform injects an internal `__hmrSite` prop (deterministic call-site identity).
+When a component has a `props` parameter, the runtime uses identity precedence:
+1) `__hmrSite` (internal call-site identity)
+2) `id`
+3) `key`
+4) hash of primitive props
+
+The fingerprint is incorporated into the counter key, so instances with different
+identities get independent counter namespaces.
 
 Registry key format:
 - Positional (no props): `filename::ComponentName::type::index::instanceNum`
 - With fingerprint: `filename::ComponentName::type::index::fp:id=42::instanceNum`
+
+When duplicate instances have no fingerprint, runtime emits a one-time dev warning
+for that bucket because positional matching may swap state after refresh.
 
 ### Why persist signals but not effects?
 
@@ -327,10 +335,10 @@ is used when the built file isn't available (e.g. during dev of this package its
    a signal resets all signals in that component. Other components in the same file
    are unaffected. A smarter diffing algorithm could preserve unaffected signals.
 
-2. **Identical propless multi-instances** — When the same component is rendered
-   multiple times without distinguishing props, state is matched by render position.
-   If the framework re-renders instances in a different order during HMR, state
-   may swap between instances. Fix: add `id` or `key` props.
+2. **Identical multi-instances in dynamic loops/non-keyed flows** — When the same
+   component is rendered multiple times and identity can't be distinguished, state
+   falls back to render position. Internal `__hmrSite` handles static sibling duplicates,
+   but dynamic reorder scenarios can still swap without explicit identity props.
 
 3. **No createResource support** — Resources involve async state and could be
    persisted similarly, but the refetch/loading state makes it trickier.

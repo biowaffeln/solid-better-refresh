@@ -204,7 +204,6 @@ describe("babel-plugin-solid-better-refresh", () => {
         }
       `;
       const output = transform(code);
-      const checkIdx = output.indexOf("__hmr_checkStructure");
       // There should be two occurrences: the import and the call
       // The call should appear before the function App definition
       const callIdx = output.indexOf("__hmr_checkStructure(import.meta.hot");
@@ -283,6 +282,67 @@ describe("babel-plugin-solid-better-refresh", () => {
       const output = transform(code);
       expect(output).toContain("__hmr_persist");
       expect(output).toMatch(/,\s*props\)/);
+    });
+  });
+
+  describe("call-site identity injection", () => {
+    it("injects __hmrSite on PascalCase JSX component call-sites", () => {
+      const code = `
+        function App() {
+          return (
+            <div>
+              <Counter />
+              <Counter />
+            </div>
+          );
+        }
+      `;
+      const output = transform(code);
+      const matches = output.match(/__hmrSite=/g) ?? [];
+      expect(matches).toHaveLength(2);
+    });
+
+    it("does not inject __hmrSite on DOM elements", () => {
+      const code = `
+        function App() {
+          return (
+            <section>
+              <div />
+              <span />
+            </section>
+          );
+        }
+      `;
+      const output = transform(code);
+      expect(output).not.toContain("__hmrSite=");
+    });
+
+    it("injects __hmrSite into compiled createComponent props object", () => {
+      const code = `
+        function App() {
+          return _createComponent(Counter, { foo: "bar" });
+        }
+      `;
+      const output = transform(code);
+      expect(output).toContain("__hmrSite");
+      expect(output).toContain('foo: "bar"');
+    });
+
+    it("injects __hmrSite for nested compiled createComponent inside IIFE", () => {
+      const code = `
+        function App() {
+          return _createComponent(ThemeProvider, {
+            get children() {
+              return (() => {
+                return _createComponent(Counter, { children: "Increment" });
+              })();
+            }
+          });
+        }
+      `;
+      const output = transform(code);
+      expect(output).toContain("_createComponent(Counter, {");
+      expect(output).toContain("__hmrSite:");
     });
   });
 

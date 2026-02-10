@@ -32,6 +32,7 @@ const REGISTRY_KEY = "__hmr_registry";
 const STRUCTURE_KEY = "__hmr_prevStructure";
 const INVALIDATED_KEY = "__hmr_invalidated";
 const INSTANCE_COUNTERS_KEY = "__hmr_instanceCounters";
+const WARNED_AMBIGUOUS_KEY = "__hmr_warnedAmbiguous";
 
 const pendingResets = new WeakSet();
 function scheduleCursorReset(hotData) {
@@ -52,9 +53,25 @@ function isPrimitive(v) {
   return v == null || (typeof v !== "object" && typeof v !== "function");
 }
 
+function hasPrimitiveIdentity(props) {
+  if (!props || typeof props !== "object") return false;
+  if ("id" in props && isPrimitive(props.id)) return true;
+  if ("key" in props && isPrimitive(props.key)) return true;
+  return false;
+}
+
+function isDevMode() {
+  try {
+    return typeof process === "undefined" || process.env.NODE_ENV !== "production";
+  } catch {
+    return true;
+  }
+}
+
 function fingerprintProps(props) {
   if (!props || typeof props !== "object") return null;
   try {
+    if ("__hmrSite" in props) { const s = props.__hmrSite; if (isPrimitive(s)) return "site=" + s; }
     if ("id" in props) { const id = props.id; if (isPrimitive(id)) return "id=" + id; }
     if ("key" in props) { const k = props.key; if (isPrimitive(k)) return "key=" + k; }
     const parts = [];
@@ -80,6 +97,21 @@ export function __hmr_persist(hot, key, factory, args, props) {
   const counters = hot.data[INSTANCE_COUNTERS_KEY];
   const instanceNum = counters.get(counterKey) ?? 0;
   counters.set(counterKey, instanceNum + 1);
+
+  const isSiteOnly = !!fingerprint && fingerprint.startsWith("site=");
+  const ambiguousByPosition = !fingerprint || (isSiteOnly && !hasPrimitiveIdentity(props));
+  if (ambiguousByPosition && instanceNum > 0 && isDevMode()) {
+    if (!hot.data[WARNED_AMBIGUOUS_KEY]) hot.data[WARNED_AMBIGUOUS_KEY] = new Set();
+    const warned = hot.data[WARNED_AMBIGUOUS_KEY];
+    if (!warned.has(counterKey)) {
+      warned.add(counterKey);
+      console.warn(
+        "[solid-better-refresh] ambiguous HMR identity for duplicate instances of \\"" +
+          componentFromKey(key) +
+          "\\". State is positional and may swap after refresh."
+      );
+    }
+  }
 
   const instanceKey = counterKey + "::" + instanceNum;
 
