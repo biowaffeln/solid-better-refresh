@@ -1,9 +1,5 @@
 :root {
-  font-family:
-    "Inter",
-    system-ui,
-    -apple-system,
-    sans-serif;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
   line-height: 1.6;
   font-weight: 400;
   color: #e0e0e0;
@@ -23,21 +19,28 @@ body {
 }
 
 #root {
-  max-width: 520px;
+  max-width: 1020px;
   width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
 }
 
-h1 {
-  font-size: 1.8em;
-  font-weight: 700;
-  margin: 0 0 0.25rem;
-  color: #fff;
-}
+header {
+  grid-column: span 2;
+  text-align: center;
+  h1 {
+    font-size: 1.8em;
+    font-weight: 700;
+    margin: 0;
+    color: #fff;
+  }
 
-h1 + p {
-  margin-top: 0;
-  color: #888;
-  font-size: 0.85em;
+  p {
+    margin-top: 0;
+    color: #ccc;
+    font-size: 1em;
+  }
 }
 
 button {
@@ -50,9 +53,7 @@ button {
   color: #e0e0e0;
   background: #2a2a3e;
   cursor: pointer;
-  transition:
-    border-color 0.2s,
-    background 0.2s;
+  transition: border-color 0.2s, background 0.2s;
 }
 
 button:hover {
@@ -101,9 +102,7 @@ input:focus {
 .themed-card {
   padding: 1.25rem;
   border-radius: 8px;
-  transition:
-    background 0.3s,
-    color 0.3s;
+  transition: background 0.3s, color 0.3s;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -128,7 +127,6 @@ input:focus {
 }
 
 .demo-section {
-  margin-top: 1.5rem;
   padding: 1.25rem;
   border: 1px solid #333;
   border-radius: 8px;
@@ -166,4 +164,73 @@ input:focus {
   font-weight: 600;
   min-width: 3ch;
   text-align: center;
+}
+
+.corvu-demo .controls {
+  margin-bottom: 0.5rem;
+}
+
+.corvu-status {
+  font-size: 0.85em;
+  color: #9aa0ff;
+}
+
+.corvu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.corvu-content {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 50;
+  width: min(92vw, 420px);
+  transform: translate(-50%, -50%);
+  border: 1px solid #45456b;
+  border-radius: 10px;
+  padding: 1rem;
+  background: #222238;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.corvu-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.corvu-description {
+  margin: 0;
+  color: #a9acc5;
+  font-size: 0.85rem;
+}
+
+.corvu-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.corvu-primary {
+  border-color: #646cff;
+  background: #3a3f93;
+}
+
+.corvu-primary:hover {
+  border-color: #7f87ff;
+  background: #434ab0;
+}
+
+.corvu-secondary {
+  background: #2a2a3e;
+}
+
+.corvu-divider {
+  border-top: 1px solid #3a3a58;
+  margin: 1rem 0;
 }

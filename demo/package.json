@@ -9,14 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@corvu/dialog": "^0.2.4",
     "solid-js": "^1.9.10"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@types/node": "^24.10.1",
+    "solid-better-refresh": "file:../packages/solid-better-refresh",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
-    "vite-plugin-solid": "^2.11.10",
-    "solid-better-refresh": "file:../packages/solid-better-refresh"
+    "vite-plugin-solid": "^2.11.10"
   }
 }

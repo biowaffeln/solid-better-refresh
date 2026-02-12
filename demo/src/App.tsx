@@ -4,6 +4,7 @@ import ThemedCard from "./ThemedCard";
 import StoreDemo from "./StoreDemo";
 import CustomPrimitiveDemo from "./CustomPrimitiveDemo";
 import { Counter } from "./Counter";
+import CorvuDialogDemo from "./CorvuDialogDemo";
 
 function App() {
   const [count, setCount] = createSignal(0);
@@ -11,9 +12,11 @@ function App() {
 
   return (
     <ThemeProvider>
-      <div>
+      <header>
         <h1>Solid Better Refresh</h1>
         <p>Edit any file and save — state persists across HMR.</p>
+      </header>
+      <div>
         <div class="controls">
           <button type="button" onClick={() => setCount((c) => c + 1)}>
             Count: {count()}
@@ -25,10 +28,11 @@ function App() {
           />
         </div>
         <p class="greeting">Hello, {name() || "world"}!</p>
-        <ThemedCard />
-        <StoreDemo />
-        <CustomPrimitiveDemo />
       </div>
+      <ThemedCard />
+      <StoreDemo />
+      <CustomPrimitiveDemo />
+      <CorvuDialogDemo />
       <div class="demo-section">
         <strong>Multiple Instances Demo</strong>
         <Counter />
