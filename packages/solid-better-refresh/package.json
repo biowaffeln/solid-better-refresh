@@ -1,6 +1,6 @@
 {
   "name": "solid-better-refresh",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "State-preserving HMR for SolidJS — persist createSignal and createStore across hot module replacements",
   "type": "module",
   "main": "dist/index.js",

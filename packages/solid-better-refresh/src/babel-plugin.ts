@@ -316,12 +316,24 @@ export default function solidBetterRefreshBabelPlugin(
           argsArray,
         ];
 
-        // If the component function has a props parameter, pass it through
-        // for fingerprint-based instance matching (reorder resilience)
+        // Pass props through for fingerprint-based instance matching (reorder resilience).
+        // If the component declares a props param, use it directly. Otherwise, use
+        // `arguments[0]` (works for function declarations/expressions after solid-refresh),
+        // or inject a synthetic param for arrow functions (which lack `arguments`).
         if (component.node) {
           const fnNode = component.node as t.FunctionDeclaration | t.FunctionExpression | t.ArrowFunctionExpression;
           if (fnNode.params.length > 0 && t.isIdentifier(fnNode.params[0])) {
             persistArgs.push(t.identifier(fnNode.params[0].name));
+          } else if (fnNode.params.length === 0) {
+            if (t.isArrowFunctionExpression(fnNode)) {
+              const syntheticParam = t.identifier("__hmr_props__");
+              fnNode.params.push(syntheticParam);
+              persistArgs.push(syntheticParam);
+            } else {
+              persistArgs.push(
+                t.memberExpression(t.identifier("arguments"), t.numericLiteral(0), true)
+              );
+            }
           }
         }
 
