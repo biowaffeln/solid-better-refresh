@@ -19,16 +19,18 @@ import solid from "vite-plugin-solid";
 import solidBetterRefresh from "solid-better-refresh";
 
 export default defineConfig({
-  plugins: [
-    solid(),
-    solidBetterRefresh(),
-  ],
+  plugins: [solid(), solidBetterRefresh()],
 });
 ```
 
 ## How it works
 
-A Babel transform rewrites `createSignal()` and `createStore()` calls inside components to use a persistence wrapper. On HMR update, the wrapper returns the previously cached signal/store instead of creating a new one.
+A Babel transform rewrites `createSignal()` and `createStore()` calls at:
+
+- component top-level scope (PascalCase components), and
+- module scope (persisted under an internal `__module__` key)
+
+to use a persistence wrapper. On HMR update, the wrapper returns the previously cached signal/store instead of creating a new one.
 
 Each component instance gets its own registry slot, so `<Counter /><Counter /><Counter />` all maintain independent state. The transform injects an internal call-site identity (`__hmrSite`) for component usages, which significantly reduces state swaps for duplicate sibling instances without requiring user props. If the component also has distinguishing props (like `id` or `key`), those remain part of fallback fingerprinting.
 
@@ -56,57 +58,52 @@ plugins: [
 ];
 ```
 
-## Known limitations
+## When state won't persist
 
-### Signals in custom hooks
+### Component library internal state
 
-Signals inside non-PascalCase functions (like `useCounter()`) are not transformed. This is by design -- the plugin can only generate stable keys for component-level primitives.
+The plugin can only transform code in your source files. If a component from a library (e.g. a dialog from Kobalte or Corvu) manages its own signals internally, that state will reset on HMR.
 
-**Workaround:** Use `createSignal` directly in the component body.
+The fix is to use controlled components — surface the state into your own code, where the plugin can persist it:
+
+```tsx
+// Uncontrolled: the library owns the open state internally — resets on HMR
+<Dialog.Root />
+
+// Controlled: you own the state — persists across HMR
+const [open, setOpen] = createSignal(false);
+<Dialog.Root open={open()} onOpenChange={setOpen} />
+```
+
+### Custom hooks
+
+Signals inside non-PascalCase functions (like `useCounter()`) are not transformed by default. You can opt them in by adding the function name to `primitives`:
+
+```ts
+solidBetterRefresh({
+  primitives: ["createCounter", "useCounter"],
+});
+```
 
 ### Signals in loops and callbacks
 
-`createSignal` inside `.map()`, `<For>` callbacks, event handlers, or any nested function is intentionally skipped. These need per-iteration identity which the plugin can't provide.
+`createSignal` inside `.map()` callbacks, `<For>` children, event handlers, or other nested functions is intentionally skipped. These create signals per-iteration and need their own identity, which the plugin can't provide statically.
 
-```tsx
-// NOT persisted (and that's correct)
-<For each={items}>{(item) => {
-  const [checked, setChecked] = createSignal(false);
-  return <input checked={checked()} />;
-}}</For>
+### Ambiguous duplicate instances
+
+When the same component appears multiple times, the plugin uses an internal call-site identity to match instances across HMR updates. This works well for most cases.
+
+If the plugin detects that two instances are ambiguous (e.g. dynamically rendered duplicates), it logs a console warning:
+
+```
+[solid-better-refresh] ambiguous HMR identity for duplicate instances of "Counter".
+State is positional and may swap after refresh.
 ```
 
-### Multiple identical instances without props
-
-When the same component is rendered multiple times without distinguishing props, the plugin first uses internal `__hmrSite` call-site identity to match instances. This handles static sibling duplicates much more reliably than pure positional matching.
-
-Fallback identity still supports `id` and `key`:
+If you see this, you can give instances an explicit `key` or `id` prop to disambiguate them:
 
 ```tsx
-// State persists correctly across HMR, even if render order changes
 <Counter key={1} />
 <Counter key={2} />
 <Counter key={3} />
 ```
-
-For fingerprinting to work, the component must accept a props parameter:
-
-```tsx
-function Counter(props: { key: number }) { ... }
-```
-
-### createResource
-
-`createResource` is not persisted and shouldn't be added to `primitives`. Resources re-run their fetcher with the new code, which is the correct behavior. They'll read from persisted signal inputs automatically.
-
-### Store shape changes
-
-If you change the shape of a `createStore` initial value without changing the total number of primitives, the old shape persists. Accessing new fields will return `undefined`. Add/remove a signal to force a structure reset.
-
-### Aliased imports
-
-`import { createSignal as cs } from "solid-js"` is not detected. Use the original name.
-
-### createMemo / createEffect
-
-These re-run correctly with new code logic and read from persisted signals. No persistence needed or provided.
